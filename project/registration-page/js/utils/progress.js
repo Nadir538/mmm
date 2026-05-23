@@ -10,34 +10,67 @@ const PROGRESS_KEY = 'spb_progress';
  */
 export function getUserProgress() {
   const progress = localStorage.getItem(PROGRESS_KEY);
-
+  
   if (progress) {
-    try {
-      return JSON.parse(progress);
-    } catch (e) {
-      console.warn('Corrupted progress data, resetting...');
-      return {};
-    }
+    return JSON.parse(progress);
   }
-
+  
   return {};
 }
 
 /**
- * Сохранить прогресс (старая логика — для совместимости)
+ * Сохранить прогресс главы (старый метод - для совместимости)
  */
 export function saveProgress(chapterId, completedQuestions) {
   const progress = getUserProgress();
-
-  // Сохраняем количество ответов, но НЕ перезаписываем completedEpisodes
+  
   if (!progress[chapterId]) {
-    progress[chapterId] = {};
+    progress[chapterId] = {
+      completedQuestions: 0,
+      completedEpisodes: [],
+      totalScore: 0,
+      lastUpdated: new Date().toISOString()
+    };
   }
-
+  
   progress[chapterId].completedQuestions = completedQuestions;
   progress[chapterId].lastUpdated = new Date().toISOString();
-
+  
   localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+}
+
+/**
+ * Сохранить прогресс эпизода
+ * @param {string} chapterId - ID главы (hermitage, isaac-cathedral, и т.д.)
+ * @param {string} episodeId - ID эпизода (episode-1, episode-2, и т.д.)
+ * @param {number} score - Набранные баллы
+ */
+export function saveEpisodeProgress(chapterId, episodeId, score) {
+  const progress = getUserProgress();
+  
+  // Инициализация главы если её нет
+  if (!progress[chapterId]) {
+    progress[chapterId] = {
+      completedEpisodes: [],
+      totalScore: 0,
+      lastUpdated: new Date().toISOString()
+    };
+  }
+  
+  // Добавить эпизод если еще не пройден
+  if (!progress[chapterId].completedEpisodes.includes(episodeId)) {
+    progress[chapterId].completedEpisodes.push(episodeId);
+  }
+  
+  // Добавить баллы
+  progress[chapterId].totalScore = (progress[chapterId].totalScore || 0) + score;
+  
+  // Обновить timestamp
+  progress[chapterId].lastUpdated = new Date().toISOString();
+  
+  localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+  
+  return progress[chapterId];
 }
 
 /**
@@ -45,50 +78,10 @@ export function saveProgress(chapterId, completedQuestions) {
  */
 export function getChapterProgress(chapterId) {
   const progress = getUserProgress();
-  return progress[chapterId] || {
-    completedQuestions: 0,
+  return progress[chapterId] || { 
     completedEpisodes: [],
-    totalScore: 0
+    totalScore: 0 
   };
-}
-
-/**
- * Сохранить прогресс эпизода
- *
- * @param {string} chapterId  - идентификатор главы (например, 'hermitage')
- * @param {string} episodeId  - идентификатор эпизода (например, 'episode-1')
- * @param {number} score      - количество баллов, полученных за эпизод
- */
-export function saveEpisodeProgress(chapterId, episodeId, score) {
-  const progress = getUserProgress();
-
-  // Инициализация структуры главы, если она ещё не создана
-  if (!progress[chapterId]) {
-    progress[chapterId] = {
-      completedEpisodes: [],
-      totalScore: 0,
-      completedQuestions: 0
-    };
-  }
-
-  // Подстраховка: если структура уже была, но без нужных полей — добавим их
-  if (!Array.isArray(progress[chapterId].completedEpisodes)) {
-    progress[chapterId].completedEpisodes = [];
-  }
-  if (typeof progress[chapterId].totalScore !== 'number') {
-    progress[chapterId].totalScore = 0;
-  }
-
-  // Добавляем эпизод, только если он ещё не пройден
-  // (избегаем дубликатов и накрутки очков)
-  if (!progress[chapterId].completedEpisodes.includes(episodeId)) {
-    progress[chapterId].completedEpisodes.push(episodeId);
-    progress[chapterId].totalScore += (Number(score) || 0);
-  }
-
-  progress[chapterId].lastUpdated = new Date().toISOString();
-
-  localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
 }
 
 /**
@@ -96,16 +89,7 @@ export function saveEpisodeProgress(chapterId, episodeId, score) {
  */
 export function isEpisodeCompleted(chapterId, episodeId) {
   const chapterProgress = getChapterProgress(chapterId);
-  const list = chapterProgress.completedEpisodes || [];
-  return list.includes(episodeId);
-}
-
-/**
- * Получить количество пройденных эпизодов в главе
- */
-export function getCompletedEpisodesCount(chapterId) {
-  const chapterProgress = getChapterProgress(chapterId);
-  return (chapterProgress.completedEpisodes || []).length;
+  return chapterProgress.completedEpisodes.includes(episodeId);
 }
 
 /**
@@ -120,10 +104,8 @@ export function resetAllProgress() {
  */
 export function resetChapterProgress(chapterId) {
   const progress = getUserProgress();
-  if (progress[chapterId]) {
-    delete progress[chapterId];
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
-  }
+  delete progress[chapterId];
+  localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
 }
 
 /**
@@ -132,4 +114,32 @@ export function resetChapterProgress(chapterId) {
 export function calculateProgress(completed, total) {
   if (total === 0) return 0;
   return Math.round((completed / total) * 100);
+}
+
+/**
+ * Получить общую статистику пользователя
+ */
+export function getTotalStats() {
+  const progress = getUserProgress();
+  let totalEpisodes = 0;
+  let totalScore = 0;
+  let totalChapters = 0;
+  
+  Object.keys(progress).forEach(chapterId => {
+    const chapter = progress[chapterId];
+    totalEpisodes += (chapter.completedEpisodes || []).length;
+    totalScore += chapter.totalScore || 0;
+    
+    if ((chapter.completedEpisodes || []).length > 0) {
+      totalChapters++;
+    }
+  });
+  
+  return {
+    totalEpisodes,
+    totalScore,
+    totalChapters,
+    totalPossibleEpisodes: 24, // 4 главы × 6 эпизодов
+    completionPercentage: Math.round((totalEpisodes / 24) * 100)
+  };
 }

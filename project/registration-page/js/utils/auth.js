@@ -11,8 +11,15 @@ const CURRENT_USER_KEY = 'spb_current_user';
  */
 export function getUsers() {
   const users = localStorage.getItem(USERS_STORAGE_KEY);
+  if (!users) return [];
 
-  return users ? JSON.parse(users) : [];
+  try {
+    const parsed = JSON.parse(users);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn('Invalid users data in localStorage, reset to empty array.', error);
+    return [];
+  }
 }
 
 /**

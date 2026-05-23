@@ -77,7 +77,7 @@ class LoginPage {
 
     const formData = new FormData(event.target);
 
-    const username = formData.get('username');
+    const username = formData.get('username').trim();
     const password = formData.get('password');
 
     const result = loginUser(username, password);

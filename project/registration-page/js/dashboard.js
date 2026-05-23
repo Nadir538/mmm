@@ -45,6 +45,7 @@ class Dashboard {
       setTimeout(() => {
         window.location.href = 'login.html';
       }, 1500);
+      return;
     }
   }
 
@@ -59,10 +60,12 @@ class Dashboard {
       
       // Обновить прогресс из localStorage
       const userProgress = getUserProgress();
+      
       this.chapters.forEach(chapter => {
         const progress = userProgress[chapter.id];
         if (progress) {
-          chapter.completedQuestions = progress.completedQuestions;
+          // Подсчитать завершённые вопросы из эпизодов
+          chapter.completedQuestions = (progress.completedEpisodes || []).length;
         }
       });
     } catch (error) {
@@ -88,12 +91,11 @@ class Dashboard {
    * Создать карточку главы
    */
   createChapterCard(chapter) {
-    const progressPercent = calculateProgress(
-      chapter.completedQuestions,
-      chapter.totalQuestions
-    );
+    const totalEpisodes = 6; // У каждой главы 6 эпизодов
+    const completedEpisodes = chapter.completedQuestions || 0;
+    const progressPercent = Math.round((completedEpisodes / totalEpisodes) * 100);
     
-    const isCompleted = chapter.completedQuestions === chapter.totalQuestions;
+    const isCompleted = completedEpisodes === totalEpisodes;
     const lockedClass = chapter.locked ? 'locked' : '';
     
     return `
@@ -139,16 +141,16 @@ class Dashboard {
           <h3 class="card-title">${chapter.title}</h3>
           
           <div class="card-progress">
-            <svg class="progress-icon" viewBox="0 0 24 24" fill="currentColor">
+            <svg class="progress-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
             </svg>
-            <span>Отвечено на вопросы: ${chapter.completedQuestions}/${chapter.totalQuestions}</span>
+            <span>Пройдено эпизодов: ${completedEpisodes}/${totalEpisodes}</span>
           </div>
           
           <!-- Progress Bar -->
-          <div class="progress-bar-container">
+          <div class="chapter-progress-bar">
             <div 
-              class="progress-bar-fill" 
+              class="chapter-progress-fill" 
               style="width: ${progressPercent}%"
               aria-valuenow="${progressPercent}"
               aria-valuemin="0"
@@ -213,17 +215,24 @@ class Dashboard {
     const chapterId = card.dataset.chapterId;
     const chapter = this.chapters.find(c => c.id === chapterId);
 
-    if (!chapter) return;
+    if (!chapter) {
+      console.error('Chapter not found:', chapterId);
+      return;
+    }
 
+    // Проверка блокировки
     if (chapter.locked) {
       showToast('Эта глава пока заблокирована', 'warning');
       return;
     }
 
-    showToast(`Переход к главе: ${chapter.title}`, 'info');
+    // Показываем уведомление
+    showToast(`Переход к главе: ${chapter.title}`, 'info', 1000);
     
-    // TODO: Навигация к странице главы
-    console.log('Opening chapter:', chapter);
+    // Переход на карту пути главы
+    setTimeout(() => {
+      window.location.href = `chapter-path.html?chapter=${chapterId}`;
+    }, 500);
   }
 
   /**
@@ -249,13 +258,19 @@ class Dashboard {
         // Уже на странице глав
         break;
       case 'map':
-        showToast('Карта (в разработке)', 'info');
+        showToast('Переход на карту...', 'info', 800);
+        setTimeout(() => {
+          window.location.href = 'map.html';
+        }, 800);
         break;
       case 'feed':
         showToast('Лента новостей (в разработке)', 'info');
         break;
       case 'profile':
-        showToast('Профиль (в разработке)', 'info');
+        showToast('Переход в профиль...', 'info', 800);
+        setTimeout(() => {
+          window.location.href = 'profile.html';
+        }, 800);
         break;
     }
   }
@@ -280,3 +295,5 @@ class Dashboard {
 document.addEventListener('DOMContentLoaded', () => {
   new Dashboard();
 });
+
+export default Dashboard;
