@@ -13,6 +13,7 @@ import {
   registerUser,
   isUsernameUnique
 } from './utils/auth.js';
+import { getPasswordStrength } from './utils/validation.js';
 
 class RegisterPage {
   constructor() {
@@ -174,6 +175,90 @@ class RegisterPage {
     if (passwordConfirmInput) {
       passwordConfirmInput.addEventListener('input', this.validatePasswordMatch.bind(this));
     }
+
+    // Индикатор силы пароля + Caps Lock warning
+    const passwordInput = document.querySelector('[name="password"]');
+    if (passwordInput) {
+      this.injectPasswordStrengthMeter(passwordInput);
+      passwordInput.addEventListener('input', () => this.updatePasswordStrength(passwordInput));
+      const capsHandler = (e) => this.handleCapsLock(e, passwordInput);
+      passwordInput.addEventListener('keydown', capsHandler);
+      passwordInput.addEventListener('keyup', capsHandler);
+      passwordInput.addEventListener('blur', () => {
+        const warn = passwordInput.closest('.input-group')?.querySelector('.caps-lock-warning');
+        if (warn) warn.remove();
+      });
+    }
+  }
+
+  /**
+   * Вставить разметку индикатора силы пароля под поле password
+   */
+  injectPasswordStrengthMeter(passwordInput) {
+    const group = passwordInput.closest('.input-group');
+    if (!group || group.querySelector('.password-strength')) return;
+
+    const meter = document.createElement('div');
+    meter.className = 'password-strength';
+    meter.innerHTML = `
+      <div class="password-strength-bar" aria-hidden="true">
+        <div class="password-strength-fill" data-level="weak" style="width: 0%"></div>
+      </div>
+      <div class="password-strength-label" aria-live="polite"></div>
+    `;
+    group.appendChild(meter);
+  }
+
+  /**
+   * Обновить индикатор силы пароля
+   */
+  updatePasswordStrength(passwordInput) {
+    const group = passwordInput.closest('.input-group');
+    if (!group) return;
+    const fill = group.querySelector('.password-strength-fill');
+    const label = group.querySelector('.password-strength-label');
+    if (!fill || !label) return;
+
+    const value = passwordInput.value;
+    if (!value) {
+      fill.style.width = '0%';
+      fill.dataset.level = 'weak';
+      label.textContent = '';
+      return;
+    }
+
+    const { strength, level, feedback } = getPasswordStrength(value);
+    fill.style.width = Math.min(100, strength) + '%';
+    fill.dataset.level = level;
+
+    const levelText = level === 'strong' ? 'Сильный'
+      : level === 'medium' ? 'Средний'
+      : 'Слабый';
+
+    label.textContent = feedback.length > 0
+      ? `${levelText} · ${feedback[0]}`
+      : levelText;
+  }
+
+  /**
+   * Предупреждение о Caps Lock
+   */
+  handleCapsLock(event, passwordInput) {
+    const capsOn = event.getModifierState && event.getModifierState('CapsLock');
+    const group = passwordInput.closest('.input-group');
+    if (!group) return;
+
+    let warn = group.querySelector('.caps-lock-warning');
+    if (capsOn) {
+      if (!warn) {
+        warn = document.createElement('div');
+        warn.className = 'caps-lock-warning';
+        warn.textContent = '⚠ Включён Caps Lock';
+        group.appendChild(warn);
+      }
+    } else if (warn) {
+      warn.remove();
+    }
   }
 
   /**
@@ -248,8 +333,11 @@ class RegisterPage {
   /**
    * Обработка отправки формы
    */
-  handleSubmit(event) {
+  async handleSubmit(event) {
     event.preventDefault();
+
+    const submitButton = document.querySelector('.btn-primary');
+    if (submitButton && submitButton.disabled) return; // защита от двойного клика
 
     const formData = new FormData(event.target);
 
@@ -259,63 +347,60 @@ class RegisterPage {
 
     // Validation
     if (username.length < 3) {
-      showToast(
-        'Имя пользователя должно быть минимум 3 символа',
-        'error'
-      );
+      showToast('Имя пользователя должно быть минимум 3 символа', 'error');
       return;
     }
 
     if (password.length < 8) {
-      showToast(
-        'Пароль должен быть минимум 8 символов',
-        'error'
-      );
+      showToast('Пароль должен быть минимум 8 символов', 'error');
       return;
     }
 
     if (password !== passwordConfirm) {
-      showToast(
-        'Пароли не совпадают',
-        'error'
-      );
+      showToast('Пароли не совпадают', 'error');
       return;
     }
 
     if (!isUsernameUnique(username)) {
-      showToast(
-        'Это имя пользователя уже занято',
-        'error'
-      );
+      showToast('Это имя пользователя уже занято', 'error');
       return;
     }
 
-    // Register user
-    const result = registerUser(username, password);
+    // Lock UI пока идёт PBKDF2 (~100мс)
+    if (submitButton) {
+      submitButton.classList.add('btn-loading');
+      submitButton.disabled = true;
+    }
+
+    // Register user (async — пароль хешируется)
+    let result;
+    try {
+      result = await registerUser(username, password);
+    } catch (error) {
+      console.error('Registration error:', error);
+      result = { success: false, message: 'Не удалось завершить регистрацию' };
+    }
 
     if (!result.success) {
+      if (submitButton) {
+        submitButton.classList.remove('btn-loading');
+        submitButton.disabled = false;
+      }
       showToast(result.message, 'error');
       return;
     }
 
     // Success
-    const submitButton = document.querySelector('.btn-primary');
-    submitButton.classList.add('btn-loading');
-    submitButton.disabled = true;
-
-    setTimeout(() => {
+    if (submitButton) {
       submitButton.classList.remove('btn-loading');
       submitButton.classList.add('btn-success');
-      
-      showToast(
-        '✓ Регистрация успешна!',
-        'success'
-      );
+    }
 
-      setTimeout(() => {
-        window.location.href = 'login.html';
-      }, 1500);
-    }, 800);
+    showToast('✓ Регистрация успешна!', 'success');
+
+    setTimeout(() => {
+      window.location.href = 'login.html';
+    }, 1200);
   }
 }
 

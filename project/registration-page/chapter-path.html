@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Путь главы | Петербургский кодекс</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,6 +14,19 @@
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="css/toast.css">
     <link rel="stylesheet" href="css/chapter-path.css">
+
+    <!-- Pre-render auth guard -->
+    <script>
+      (function () {
+        try {
+          if (!localStorage.getItem('spb_current_user')) {
+            try { sessionStorage.setItem('spb_redirect_after_login', location.href); } catch (_) {}
+            document.documentElement.style.visibility = 'hidden';
+            location.replace('login.html');
+          }
+        } catch (e) { location.replace('login.html'); }
+      })();
+    </script>
 </head>
 <body class="chapter-path-page">
 

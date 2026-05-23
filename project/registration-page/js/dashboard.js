@@ -2,10 +2,23 @@
  * Dashboard Main Script
  */
 
-import { getCurrentUser } from './utils/auth.js';
+import { requireAuth, logoutUser } from './utils/auth.js';
 import { initTheme, toggleTheme } from './utils/theme.js';
 import { getUserProgress, calculateProgress } from './utils/progress.js';
 import { showToast } from './utils/animations.js';
+
+/**
+ * Экранирование HTML для безопасной подстановки в innerHTML.
+ */
+function escapeHtml(text) {
+  if (text == null) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 class Dashboard {
   constructor() {
@@ -15,38 +28,38 @@ class Dashboard {
   }
 
   async init() {
-    // Проверка авторизации
-    this.checkAuth();
-    
+    // Auth-guard: если не авторизован — redirect и стоп
+    this.currentUser = requireAuth('login.html');
+    if (!this.currentUser) return;
+
     // Инициализация темы
     initTheme();
-    
+
     // Загрузка данных
     await this.loadChapters();
-    
+
     // Рендер компонентов
     this.renderChapters();
-    
+    this.renderUserBadge();
+
     // Подключение событий
     this.attachEvents();
-    
+
     // Приветствие
     this.showWelcome();
   }
 
   /**
-   * Проверка авторизации
+   * Отображение текущего пользователя в шапке
    */
-  checkAuth() {
-    this.currentUser = getCurrentUser();
-    
-    if (!this.currentUser) {
-      showToast('Необходима авторизация', 'error');
-      setTimeout(() => {
-        window.location.href = 'login.html';
-      }, 1500);
-      return;
-    }
+  renderUserBadge() {
+    const badge = document.getElementById('user-badge');
+    const name = document.getElementById('user-badge-name');
+    if (!badge || !name || !this.currentUser) return;
+
+    name.textContent = this.currentUser.username;
+    badge.hidden = false;
+    badge.setAttribute('title', `Вы вошли как ${this.currentUser.username}`);
   }
 
   /**
@@ -98,18 +111,22 @@ class Dashboard {
     const isCompleted = completedEpisodes === totalEpisodes;
     const lockedClass = chapter.locked ? 'locked' : '';
     
+    const safeTitle = escapeHtml(chapter.title);
+    const safeImage = escapeHtml(chapter.image);
+    const safeId = escapeHtml(chapter.id);
+
     return `
       <article 
         class="chapter-card ${lockedClass}" 
-        data-chapter-id="${chapter.id}"
+        data-chapter-id="${safeId}"
         tabindex="0"
         role="button"
-        aria-label="${chapter.title}"
+        aria-label="${safeTitle}"
       >
         <!-- Background Image -->
         <img 
-          src="${chapter.image}" 
-          alt="${chapter.title}"
+          src="${safeImage}" 
+          alt="${safeTitle}"
           class="card-image"
           loading="lazy"
         />
@@ -138,7 +155,7 @@ class Dashboard {
         
         <!-- Content -->
         <div class="card-content">
-          <h3 class="card-title">${chapter.title}</h3>
+          <h3 class="card-title">${safeTitle}</h3>
           
           <div class="card-progress">
             <svg class="progress-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -185,6 +202,20 @@ class Dashboard {
     if (settingsBtn) {
       settingsBtn.addEventListener('click', () => {
         showToast('Настройки (в разработке)', 'info');
+      });
+    }
+
+    // Logout Button
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        const confirmed = confirm('Выйти из аккаунта?');
+        if (!confirmed) return;
+        logoutUser();
+        showToast('Вы вышли из аккаунта', 'info', 1200);
+        setTimeout(() => {
+          window.location.href = 'login.html';
+        }, 700);
       });
     }
 
